@@ -45,3 +45,7 @@ def scroll_page(driver, scrolls=5, pause_time=2):
 print("Scrolling de la page...")
 scroll_page(driver, scrolls=5, pause_time=2)
 
+# on veut le titre le prix original e prix réduit la réduction et l'évaluation.
+
+titre = driver.find_element(By.XPATH, "//div[contains(@class, 'ImpressionTrackedElement')]//img").get_attribute("alt")
+print(titre)
