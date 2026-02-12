@@ -49,3 +49,7 @@ scroll_page(driver, scrolls=5, pause_time=2)
 
 titre = driver.find_element(By.XPATH, "//div[contains(@class, 'ImpressionTrackedElement')]//img").get_attribute("alt")
 print(titre)
+
+
+infos_prix = driver.find_element(By.XPATH, "//div[contains(@class, 'StoreSalePriceWidgetContainer')]").get_attribute("aria-label")
+print(infos_prix)
