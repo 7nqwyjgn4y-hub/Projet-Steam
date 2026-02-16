@@ -1,105 +1,139 @@
 import pandas as pd
 import tkinter as tk
 from tkinter import ttk, messagebox
-import re
+import webbrowser
 
 class SteamAnalyzerApp:
     def __init__(self, root, file_path):
         self.root = root
-        self.root.title("Steam Data Analyzer")
-        self.root.geometry("400x450")
+        self.root.title("Steam Deals Analyzer")
+        self.root.geometry("500x750")
         
-        # Chargement des données
         self.df = self.load_and_clean_data(file_path)
         
-        # Initialisation de l'interface
         if self.df is not None:
             self.setup_ui()
         else:
-            messagebox.showerror("Erreur", "Impossible de charger le fichier CSV.")
+            messagebox.showerror("Erreur", f"Impossible de lire {file_path}")
 
     def load_and_clean_data(self, path):
-        """Charge le CSV et extrait les données numériques par Regex."""
         try:
             df = pd.read_csv(path)
-            
-            # Extraction du pourcentage (ex: "30 %" -> 30.0)
-            df['Reduc_Val'] = df['Infos Prix'].str.extract(r'(\d+)\s*%').astype(float)
-            
-            # Extraction du prix après le "à" (ex: "à 27,99€" -> 27.99)
-            # On gère le remplacement de la virgule par le point pour le type float
-            df['Prix_Net'] = df['Infos Prix'].str.extract(r'à\s*([\d,]+)')\
-                                            .replace(',', '.', regex=True).astype(float)
-            
-            # Nettoyage de la colonne Avis pour ne garder que le texte entre guillemets
-            df['Avis_Clean'] = df['Avis'].str.extract(r'«\s*(.*?)\s*»')
-            
+            # Nettoyage des prix numériques
+            df['Prix_Net'] = df['Infos Prix'].str.extract(r'à\s*([\d,]+)').replace(',', '.', regex=True).astype(float)
+            # Nettoyage du pourcentage (ex: "30 %" -> 30)
+            df['Reduc_Val'] = df['Infos Prix'].str.extract(r'(\d+)\s*%').astype(float).fillna(0)
+            # Préparation des avis (minuscules pour recherche souple)
+            df['Avis_Lower'] = df['Avis'].str.lower().fillna("")
+            df['Tags'] = df['Tags'].fillna("")
+            df['Lien'] = df['Lien'].fillna("")
             return df
         except Exception as e:
-            print(f"Erreur de lecture : {e}")
+            print(f"Erreur data : {e}")
             return None
 
     def setup_ui(self):
-        """Crée les widgets de l'interface."""
-        main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        container = ttk.Frame(self.root, padding="25")
+        container.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(main_frame, text="Analyseur de Promotions Steam", font=('Helvetica', 12, 'bold')).pack(pady=10)
+        ttk.Label(container, text="🔥 Steam Hunter v3.0", font=('Helvetica', 16, 'bold')).pack(pady=10)
 
-        #--- Menu Réduction ---
-        ttk.Label(main_frame, text="Réduction minimum :").pack(anchor=tk.W)
-        self.reduc_var = tk.StringVar()
-        self.combo_reduc = ttk.Combobox(main_frame, textvariable=self.reduc_var, state="readonly")
-        self.combo_reduc['values'] = ("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%",)
-        self.combo_reduc.current(0)
-        self.combo_reduc.pack(fill=tk.X, pady=5)
+        # --- FILTRE RÉDUCTION ---
+        ttk.Label(container, text="Réduction minimum :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
+        self.reduc_var = tk.StringVar(value="30%")
+        reduc_cb = ttk.Combobox(container, textvariable=self.reduc_var, state="readonly",
+                                values=[f"{i}%" for i in range(0, 100, 10)])
+        reduc_cb.pack(fill=tk.X, pady=5)
 
-        #--- Menu Avis ---
-        ttk.Label(main_frame, text="Avis des utilisateurs :").pack(anchor=tk.W)
-        self.avis_var = tk.StringVar()
-        self.combo_avis = ttk.Combobox(main_frame, textvariable=self.avis_var, state="readonly")
-        # On récupère dynamiquement les types d'avis présents dans le CSV
-        avis_possibles = self.df['Avis_Clean'].dropna().unique().tolist()
-        self.combo_avis['values'] = avis_possibles
-        self.combo_avis.current(0)
-        self.combo_avis.pack(fill=tk.X, pady=5)
+        # --- FILTRE AVIS ---
+        ttk.Label(container, text="Sentiment des avis :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W, pady=(10,0))
+        self.avis_var = tk.StringVar(value="positives")
+        ttk.Combobox(container, textvariable=self.avis_var, state="readonly", 
+                     values=("positives", "moyennes", "négatives")).pack(fill=tk.X, pady=5)
 
-        #--- Menu Prix ---
-        ttk.Label(main_frame, text="Budget max (Tranches) :").pack(anchor=tk.W)
-        self.prix_var = tk.StringVar()
-        self.combo_prix = ttk.Combobox(main_frame, textvariable=self.prix_var, state="readonly")
-        self.combo_prix['values'] = ("10", "20", "30", "50", "60","70", "80", "90", "100")
-        self.combo_prix.current(2)
-        self.combo_prix.pack(fill=tk.X, pady=5)
+        # --- FILTRE BUDGET ---
+        ttk.Label(container, text="Budget maximum (€) :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W, pady=(10,0))
+        self.prix_var = tk.StringVar(value="50")
+        ttk.Combobox(container, textvariable=self.prix_var, state="readonly", 
+                     values=("10", "20", "30", "50", "100")).pack(fill=tk.X, pady=5)
 
-        #--- Bouton d'action ---
-        self.btn_search = ttk.Button(main_frame, text="Filtrer les jeux", command=self.apply_filter)
-        self.btn_search.pack(pady=20)
+        # --- SECTION MULTI-TAGS (Max 3) ---
+        ttk.Separator(container, orient='horizontal').pack(fill='x', pady=20)
+        ttk.Label(container, text="Sélectionnez jusqu'à 3 tags :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
+
+        # Extraction unique des tags
+        all_tags = set()
+        for row in self.df['Tags'].str.split(','):
+            all_tags.update([t.strip() for t in row if t.strip()])
+        tag_list = ["Aucun"] + sorted(list(all_tags))
+
+        self.tag_vars = []
+        for i in range(3):
+            v = tk.StringVar(value="Aucun")
+            cb = ttk.Combobox(container, textvariable=v, values=tag_list, state="readonly")
+            cb.pack(fill=tk.X, pady=2)
+            self.tag_vars.append(v)
+
+        # --- BOUTON DE RECHERCHE ---
+        ttk.Style().configure("TButton", font=('Helvetica', 10, 'bold'))
+        self.btn_search = ttk.Button(container, text="VOIR LES OFFRES", command=self.apply_filter)
+        self.btn_search.pack(fill=tk.X, pady=30)
 
     def apply_filter(self):
-        """Logique de filtrage déclenchée par le bouton."""
-        # Récupération des valeurs
+        # Récupération des critères
         reduc_min = float(self.reduc_var.get().replace('%', ''))
-        avis_cible = self.avis_var.get()
         prix_max = float(self.prix_var.get())
-
-        # Filtrage Pandas
-        mask = (self.df['Reduc_Val'] >= reduc_min) & \
-               (self.df['Avis_Clean'] == avis_cible) & \
-               (self.df['Prix_Net'] <= prix_max)
+        sentiment = self.avis_var.get()
         
+        # Filtre de base
+        mask = (self.df['Reduc_Val'] >= reduc_min) & \
+               (self.df['Prix_Net'] <= prix_max) & \
+               (self.df['Avis_Lower'].str.contains(sentiment))
+
+        # Ajout des tags sélectionnés (Logique "ET")
+        selected_tags = [v.get() for v in self.tag_vars if v.get() != "Aucun"]
+        for tag in selected_tags:
+            mask = mask & (self.df['Tags'].str.contains(tag, case=False))
+
         results = self.df[mask]
 
-        # Affichage du résultat
         if not results.empty:
-            message = "Jeux trouvés :\n\n"
-            for index, row in results.iterrows():
-                message += f"• {row['Titre']} ({row['Prix_Net']}€)\n"
-            messagebox.showinfo("Résultats de recherche", message)
+            self.show_results(results)
         else:
-            messagebox.showwarning("Aucun résultat", "Aucun jeu ne correspond à ces critères.")
+            messagebox.showinfo("Oups", "Aucun jeu ne correspond à tous ces critères.")
 
-# --- Lancement de l'application ---
+    def show_results(self, results):
+        res_win = tk.Toplevel(self.root)
+        res_win.title(f"Résultats ({len(results)} jeux)")
+        res_win.geometry("450x500")
+
+        # Zone de défilement pour les résultats
+        canvas = tk.Canvas(res_win)
+        scroll_y = ttk.Scrollbar(res_win, orient="vertical", command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas)
+
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scroll_y.set)
+
+        for _, row in results.iterrows():
+            frame_jeu = ttk.Frame(scroll_frame, padding=5)
+            frame_jeu.pack(fill=tk.X)
+
+            # Titre cliquable
+            lbl = tk.Label(frame_jeu, text=f"{row['Titre']}", fg="#1a73e8", cursor="hand2", 
+                           font=("Helvetica", 11, "bold", "underline"))
+            lbl.pack(anchor=tk.W)
+            lbl.bind("<Button-1>", lambda e, url=row['Lien']: webbrowser.open_new(url))
+
+            # Infos prix
+            tk.Label(frame_jeu, text=f"Prix: {row['Prix_Net']}€ (-{int(row['Reduc_Val'])}%)", 
+                     font=("Helvetica", 9)).pack(anchor=tk.W)
+            ttk.Separator(scroll_frame, orient='horizontal').pack(fill='x', padx=10, pady=5)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scroll_y.pack(side="right", fill="y")
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SteamAnalyzerApp(root, "jeux_steam.csv")
