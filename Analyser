@@ -3,138 +3,163 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import webbrowser
 
-class SteamAnalyzerApp:
-    def __init__(self, root, file_path):
-        self.root = root
-        self.root.title("Steam Deals Analyzer")
-        self.root.geometry("500x750")
-        
-        self.df = self.load_and_clean_data(file_path)
-        
-        if self.df is not None:
-            self.setup_ui()
-        else:
-            messagebox.showerror("Erreur", f"Impossible de lire {file_path}")
+# --- CLASSE LOGIQUE (LE CERVEAU) ---
+class SteamDataManager:
+    """Gère le chargement, le nettoyage et le filtrage des données Steam."""
+    
+    def __init__(self, file_path):
+        self.df = self._load_and_clean(file_path)
 
-    def load_and_clean_data(self, path):
+    def _load_and_clean(self, path):
         try:
             df = pd.read_csv(path)
-            # Nettoyage des prix numériques
+            # Extraction propre des prix et réductions
             df['Prix_Net'] = df['Infos Prix'].str.extract(r'à\s*([\d,]+)').replace(',', '.', regex=True).astype(float)
-            # Nettoyage du pourcentage (ex: "30 %" -> 30)
             df['Reduc_Val'] = df['Infos Prix'].str.extract(r'(\d+)\s*%').astype(float).fillna(0)
-            # Préparation des avis (minuscules pour recherche souple)
+            
+            # Nettoyage des textes pour la recherche
             df['Avis_Lower'] = df['Avis'].str.lower().fillna("")
             df['Tags'] = df['Tags'].fillna("")
             df['Lien'] = df['Lien'].fillna("")
             return df
         except Exception as e:
-            print(f"Erreur data : {e}")
+            print(f"Erreur lors de la lecture des données : {e}")
             return None
 
-    def setup_ui(self):
-        container = ttk.Frame(self.root, padding="25")
-        container.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(container, text="🔥 Steam Hunter v3.0", font=('Helvetica', 16, 'bold')).pack(pady=10)
-
-        # --- FILTRE RÉDUCTION ---
-        ttk.Label(container, text="Réduction minimum :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
-        self.reduc_var = tk.StringVar(value="30%")
-        reduc_cb = ttk.Combobox(container, textvariable=self.reduc_var, state="readonly",
-                                values=[f"{i}%" for i in range(0, 100, 10)])
-        reduc_cb.pack(fill=tk.X, pady=5)
-
-        # --- FILTRE AVIS ---
-        ttk.Label(container, text="Sentiment des avis :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W, pady=(10,0))
-        self.avis_var = tk.StringVar(value="positives")
-        ttk.Combobox(container, textvariable=self.avis_var, state="readonly", 
-                     values=("positives", "moyennes", "négatives")).pack(fill=tk.X, pady=5)
-
-        # --- FILTRE BUDGET ---
-        ttk.Label(container, text="Budget maximum (€) :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W, pady=(10,0))
-        self.prix_var = tk.StringVar(value="50")
-        ttk.Combobox(container, textvariable=self.prix_var, state="readonly", 
-                     values=("10", "20", "30", "50", "100")).pack(fill=tk.X, pady=5)
-
-        # --- SECTION MULTI-TAGS (Max 3) ---
-        ttk.Separator(container, orient='horizontal').pack(fill='x', pady=20)
-        ttk.Label(container, text="Sélectionnez jusqu'à 3 tags :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
-
-        # Extraction unique des tags
+    def get_unique_tags(self):
+        """Récupère la liste de tous les tags disponibles sans doublons."""
+        if self.df is None: return []
         all_tags = set()
         for row in self.df['Tags'].str.split(','):
             all_tags.update([t.strip() for t in row if t.strip()])
-        tag_list = ["Aucun"] + sorted(list(all_tags))
+        return sorted(list(all_tags))
 
-        self.tag_vars = []
-        for i in range(3):
-            v = tk.StringVar(value="Aucun")
-            cb = ttk.Combobox(container, textvariable=v, values=tag_list, state="readonly")
-            cb.pack(fill=tk.X, pady=2)
-            self.tag_vars.append(v)
-
-        # --- BOUTON DE RECHERCHE ---
-        ttk.Style().configure("TButton", font=('Helvetica', 10, 'bold'))
-        self.btn_search = ttk.Button(container, text="VOIR LES OFFRES", command=self.apply_filter)
-        self.btn_search.pack(fill=tk.X, pady=30)
-
-    def apply_filter(self):
-        # Récupération des critères
-        reduc_min = float(self.reduc_var.get().replace('%', ''))
-        prix_max = float(self.prix_var.get())
-        sentiment = self.avis_var.get()
-        
-        # Filtre de base
-        mask = (self.df['Reduc_Val'] >= reduc_min) & \
-               (self.df['Prix_Net'] <= prix_max) & \
+    def filter_games(self, min_reduc, max_price, sentiment, selected_tags):
+        """Applique les filtres et retourne un DataFrame de résultats."""
+        mask = (self.df['Reduc_Val'] >= min_reduc) & \
+               (self.df['Prix_Net'] <= max_price) & \
                (self.df['Avis_Lower'].str.contains(sentiment))
 
-        # Ajout des tags sélectionnés (Logique "ET")
-        selected_tags = [v.get() for v in self.tag_vars if v.get() != "Aucun"]
         for tag in selected_tags:
-            mask = mask & (self.df['Tags'].str.contains(tag, case=False))
+            if tag != "Aucun":
+                mask = mask & (self.df['Tags'].str.contains(tag, case=False))
+        
+        return self.df[mask]
 
-        results = self.df[mask]
 
-        if not results.empty:
-            self.show_results(results)
-        else:
-            messagebox.showinfo("Oups", "Aucun jeu ne correspond à tous ces critères.")
+# --- CLASSE INTERFACE RÉSULTATS (LA LISTE) ---
+class ResultsWindow(tk.Toplevel):
+    """Fenêtre secondaire affichant les jeux trouvés."""
+    
+    def __init__(self, parent, results):
+        super().__init__(parent)
+        self.title(f"Pépites trouvées ({len(results)})")
+        self.geometry("450x500")
+        self._build_ui(results)
 
-    def show_results(self, results):
-        res_win = tk.Toplevel(self.root)
-        res_win.title(f"Résultats ({len(results)} jeux)")
-        res_win.geometry("450x500")
+    def _build_ui(self, results):
+        canvas = tk.Canvas(self)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
 
-        # Zone de défilement pour les résultats
-        canvas = tk.Canvas(res_win)
-        scroll_y = ttk.Scrollbar(res_win, orient="vertical", command=canvas.yview)
-        scroll_frame = ttk.Frame(canvas)
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scroll_y.set)
-
-        for _, row in results.iterrows():
-            frame_jeu = ttk.Frame(scroll_frame, padding=5)
-            frame_jeu.pack(fill=tk.X)
+        for _, game in results.iterrows():
+            card = ttk.Frame(scrollable_frame, padding=10)
+            card.pack(fill=tk.X)
 
             # Titre cliquable
-            lbl = tk.Label(frame_jeu, text=f"{row['Titre']}", fg="#1a73e8", cursor="hand2", 
-                           font=("Helvetica", 11, "bold", "underline"))
-            lbl.pack(anchor=tk.W)
-            lbl.bind("<Button-1>", lambda e, url=row['Lien']: webbrowser.open_new(url))
+            link_label = tk.Label(card, text=game['Titre'], fg="#1a73e8", cursor="hand2", 
+                                  font=("Helvetica", 11, "bold", "underline"), wraplength=400, justify="left")
+            link_label.pack(anchor=tk.W)
+            link_label.bind("<Button-1>", lambda e, url=game['Lien']: webbrowser.open_new(url))
 
-            # Infos prix
-            tk.Label(frame_jeu, text=f"Prix: {row['Prix_Net']}€ (-{int(row['Reduc_Val'])}%)", 
-                     font=("Helvetica", 9)).pack(anchor=tk.W)
-            ttk.Separator(scroll_frame, orient='horizontal').pack(fill='x', padx=10, pady=5)
+            # Détails
+            info_text = f"💰 {game['Prix_Net']}€ | Réduction : -{int(game['Reduc_Val'])}%"
+            tk.Label(card, text=info_text, font=("Helvetica", 9)).pack(anchor=tk.W)
+            
+            ttk.Separator(scrollable_frame, orient='horizontal').pack(fill='x', padx=20, pady=5)
 
         canvas.pack(side="left", fill="both", expand=True)
-        scroll_y.pack(side="right", fill="y")
+        scrollbar.pack(side="right", fill="y")
+
+
+# --- CLASSE PRINCIPALE (L'APPLICATION) ---
+class SteamHunterApp:
+    def __init__(self, root, file_path):
+        self.root = root
+        self.root.title("Steam Hunter v3.0")
+        self.root.geometry("500x750")
+        
+        # Initialisation de la donnée
+        self.data_manager = SteamDataManager(file_path)
+        
+        if self.data_manager.df is not None:
+            self._setup_main_ui()
+        else:
+            messagebox.showerror("Erreur Fatale", "Fichier de données introuvable ou corrompu.")
+
+    def _setup_main_ui(self):
+        main_container = ttk.Frame(self.root, padding="25")
+        main_container.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_container, text="🎯 Steam Hunter", font=('Helvetica', 18, 'bold')).pack(pady=15)
+
+        # Configuration des menus déroulants
+        self.reduc_var = self._create_label_and_cb(main_container, "Réduction minimum :", 
+                                                   [f"{i}%" for i in range(0, 100, 10)], "30%")
+        
+        self.avis_var = self._create_label_and_cb(main_container, "Avis des joueurs :", 
+                                                  ["positives", "moyennes", "négatives"], "positives")
+        
+        self.prix_var = self._create_label_and_cb(main_container, "Budget max (€) :", 
+                                                  ["10", "20", "30", "50", "100"], "50")
+
+        # Section Tags
+        ttk.Separator(main_container, orient='horizontal').pack(fill='x', pady=20)
+        ttk.Label(main_container, text="Filtres par Tags (max 3) :", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
+
+        tag_list = ["Aucun"] + self.data_manager.get_unique_tags()
+        self.tag_vars = []
+        for _ in range(3):
+            var = tk.StringVar(value="Aucun")
+            cb = ttk.Combobox(main_container, textvariable=var, values=tag_list, state="readonly")
+            cb.pack(fill=tk.X, pady=3)
+            self.tag_vars.append(var)
+
+        # Bouton d'action
+        btn = ttk.Button(main_container, text="CHASSER LES OFFRES", command=self._on_search_clicked)
+        btn.pack(fill=tk.X, pady=30)
+
+    def _create_label_and_cb(self, parent, label_text, values, default):
+        """Helper pour créer rapidement un label + combobox."""
+        ttk.Label(parent, text=label_text, font=('Helvetica', 10, 'bold')).pack(anchor=tk.W, pady=(10, 0))
+        var = tk.StringVar(value=default)
+        cb = ttk.Combobox(parent, textvariable=var, values=values, state="readonly")
+        cb.pack(fill=tk.X, pady=5)
+        return var
+
+    def _on_search_clicked(self):
+        # Extraction des valeurs
+        try:
+            reduc = float(self.reduc_var.get().replace('%', ''))
+            budget = float(self.prix_var.get())
+            sentiment = self.avis_var.get()
+            tags = [v.get() for v in self.tag_vars]
+
+            results = self.data_manager.filter_games(reduc, budget, sentiment, tags)
+
+            if not results.empty:
+                ResultsWindow(self.root, results)
+            else:
+                messagebox.showinfo("Bredouille", "Aucun jeu ne correspond à vos critères.")
+        except ValueError:
+            messagebox.showwarning("Attention", "Veuillez vérifier vos filtres.")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = SteamAnalyzerApp(root, "jeux_steam.csv")
+    # Assurez-vous que le fichier csv est dans le même dossier
+    app = SteamHunterApp(root, "jeux_steam.csv")
     root.mainloop()
