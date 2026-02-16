@@ -118,12 +118,35 @@ with open('jeux_steam.csv', 'w', newline='', encoding='utf-8') as f:
         except:
             resume = "Pas de résumé disponible"
 
+        try:
+            # --- TAGS ---
+            elements_tags = jeu.find_elements(By.XPATH, ".//a[contains(@href, '/tags/')]")
+            
+            # CORRECTION MAJEURE ICI :
+            # 1. On utilise .get_attribute("textContent") au lieu de .text pour lire même les tags cachés
+            # 2. On ajoute .strip() pour nettoyer les espaces
+            # 3. On filtre (if tag) pour virer les vides s'il y en a encore
+            
+            liste_tags_propre = [t.get_attribute("textContent").strip() for t in elements_tags]
+            liste_tags_propre = [tag for tag in liste_tags_propre if tag] # Double sécurité
+            
+            # On extrait le texte de chaque balise trouvée
+            # Et on les rejoint avec une virgule (ex: "RPG, Aventure, Action")
+            tags = ", ".join(liste_tags_propre)
+            
+            if not tags:
+                tags = "Aucun tag"
+                
+        except:
+            tags = "Erreur récupération tags"
+
         # Affichage des résultats liés
         print(f"Jeu : {titre}")
         print(f"Prix : {infos_prix}")
         print(f"Avis : {infos_eval}")
         print(f"Résumé : {resume}")
-        writer.writerow([titre, infos_prix, infos_eval, resume])
+        print(f"Tags : {tags}")
+        writer.writerow([titre, infos_prix, infos_eval, resume, tags])
         print(f"Sauvegardé : {titre}")
 
 print("--- FIN DU SCRAPING ---")
