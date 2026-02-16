@@ -1,68 +1,106 @@
 import pandas as pd
 import tkinter as tk
 from tkinter import ttk, messagebox
+import re
 
-def analyser_csv(jeux_steam):
-    # 1. Chargement et nettoyage
-    try:
-        df = pd.read_csv(jeux_steam)
+class SteamAnalyzerApp:
+    def __init__(self, root, file_path):
+        self.root = root
+        self.root.title("Steam Data Analyzer")
+        self.root.geometry("400x450")
         
-        # Extraction du pourcentage (ex: "30 %" -> 30)
-        df['Reduc_Val'] = df['Infos Prix'].str.extract(r'(\d+)\s*%').astype(float)
+        # Chargement des données
+        self.df = self.load_and_clean_data(file_path)
         
-        # Extraction du prix après le "à" (ex: "à 27,99€" -> 27.99)
-        # On remplace la virgule par un point pour le calcul
-        df['Prix_Net'] = df['Infos Prix'].str.extract(r'à\s*([\d,]+)').replace(',', '.', regex=True).astype(float)
+        # Initialisation de l'interface
+        if self.df is not None:
+            self.setup_ui()
+        else:
+            messagebox.showerror("Erreur", "Impossible de charger le fichier CSV.")
+
+    def load_and_clean_data(self, path):
+        """Charge le CSV et extrait les données numériques par Regex."""
+        try:
+            df = pd.read_csv(path)
+            
+            # Extraction du pourcentage (ex: "30 %" -> 30.0)
+            df['Reduc_Val'] = df['Infos Prix'].str.extract(r'(\d+)\s*%').astype(float)
+            
+            # Extraction du prix après le "à" (ex: "à 27,99€" -> 27.99)
+            # On gère le remplacement de la virgule par le point pour le type float
+            df['Prix_Net'] = df['Infos Prix'].str.extract(r'à\s*([\d,]+)')\
+                                            .replace(',', '.', regex=True).astype(float)
+            
+            # Nettoyage de la colonne Avis pour ne garder que le texte entre guillemets
+            df['Avis_Clean'] = df['Avis'].str.extract(r'«\s*(.*?)\s*»')
+            
+            return df
+        except Exception as e:
+            print(f"Erreur de lecture : {e}")
+            return None
+
+    def setup_ui(self):
+        """Crée les widgets de l'interface."""
+        main_frame = ttk.Frame(self.root, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main_frame, text="Analyseur de Promotions Steam", font=('Helvetica', 12, 'bold')).pack(pady=10)
+
+        #--- Menu Réduction ---
+        ttk.Label(main_frame, text="Réduction minimum :").pack(anchor=tk.W)
+        self.reduc_var = tk.StringVar()
+        self.combo_reduc = ttk.Combobox(main_frame, textvariable=self.reduc_var, state="readonly")
+        self.combo_reduc['values'] = ("0%", "10%", "30%", "50%", "70%")
+        self.combo_reduc.current(0)
+        self.combo_reduc.pack(fill=tk.X, pady=5)
+
+        #--- Menu Avis ---
+        ttk.Label(main_frame, text="Avis des utilisateurs :").pack(anchor=tk.W)
+        self.avis_var = tk.StringVar()
+        self.combo_avis = ttk.Combobox(main_frame, textvariable=self.avis_var, state="readonly")
+        # On récupère dynamiquement les types d'avis présents dans le CSV
+        avis_possibles = self.df['Avis_Clean'].dropna().unique().tolist()
+        self.combo_avis['values'] = avis_possibles
+        self.combo_avis.current(0)
+        self.combo_avis.pack(fill=tk.X, pady=5)
+
+        #--- Menu Prix ---
+        ttk.Label(main_frame, text="Budget max (Tranches) :").pack(anchor=tk.W)
+        self.prix_var = tk.StringVar()
+        self.combo_prix = ttk.Combobox(main_frame, textvariable=self.prix_var, state="readonly")
+        self.combo_prix['values'] = ("10", "20", "30", "50", "100")
+        self.combo_prix.current(2)
+        self.combo_prix.pack(fill=tk.X, pady=5)
+
+        #--- Bouton d'action ---
+        self.btn_search = ttk.Button(main_frame, text="Filtrer les jeux", command=self.apply_filter)
+        self.btn_search.pack(pady=20)
+
+    def apply_filter(self):
+        """Logique de filtrage déclenchée par le bouton."""
+        # Récupération des valeurs
+        reduc_min = float(self.reduc_var.get().replace('%', ''))
+        avis_cible = self.avis_var.get()
+        prix_max = float(self.prix_var.get())
+
+        # Filtrage Pandas
+        mask = (self.df['Reduc_Val'] >= reduc_min) & \
+               (self.df['Avis_Clean'] == avis_cible) & \
+               (self.df['Prix_Net'] <= prix_max)
         
-        return df
-    except Exception as e:
-        print(f"Erreur lors de la lecture : {e}")
-        return None
+        results = self.df[mask]
 
-def filtrer_donnees(df, reduc, avis, prix_max):
-    # Logique de filtrage
-    mask = (df['Reduc_Val'] >= float(reduc.replace('%',''))) & \
-           (df['Avis'].str.contains(avis, na=False)) & \
-           (df['Prix_Net'] <= float(prix_max))
-    
-    resultat = df[mask]
-    
-    if resultat.empty:
-        messagebox.showinfo("Résultat", "Aucun jeu ne correspond à ces critères.")
-    else:
-        # Affiche les titres trouvés dans la console ou une popup
-        titres = "\n".join(resultat['Titre'].tolist())
-        messagebox.showinfo("Jeux trouvés", f"Voici les jeux correspondants :\n\n{titres}")
+        # Affichage du résultat
+        if not results.empty:
+            message = "Jeux trouvés :\n\n"
+            for index, row in results.iterrows():
+                message += f"• {row['Titre']} ({row['Prix_Net']}€)\n"
+            messagebox.showinfo("Résultats de recherche", message)
+        else:
+            messagebox.showwarning("Aucun résultat", "Aucun jeu ne correspond à ces critères.")
 
-# --- Interface Graphique ---
-df_jeux = analyser_csv('jeux_steam.csv')
-
-if df_jeux is not None:
+# --- Lancement de l'application ---
+if __name__ == "__main__":
     root = tk.Tk()
-    root.title("Filtre de Jeux Steam")
-    root.geometry("300x350")
-
-    # Liste des réductions
-    tk.Label(root, text="Réduction minimum :").pack(pady=5)
-    combo_reduc = ttk.Combobox(root, values=["10%", "30%", "50%", "70%"])
-    combo_reduc.current(0)
-    combo_reduc.pack()
-
-    # Liste des avis
-    tk.Label(root, text="Qualité des avis :").pack(pady=5)
-    combo_avis = ttk.Combobox(root, values=["extrêmement positives", "très positives", "moyennes"])
-    combo_avis.current(1)
-    combo_avis.pack()
-
-    # Tranches de prix
-    tk.Label(root, text="Prix maximum :").pack(pady=5)
-    combo_prix = ttk.Combobox(root, values=["10", "20", "30", "60"])
-    combo_prix.current(2)
-    combo_prix.pack()
-
-    # Bouton de validation
-    btn = tk.Button(root, text="Rechercher", 
-                    command=lambda: filtrer_donnees(df_jeux, combo_reduc.get(), combo_avis.get(), combo_prix.get()))
-    btn.pack(pady=20)
-
+    app = SteamAnalyzerApp(root, "jeux_steam.csv")
     root.mainloop()
