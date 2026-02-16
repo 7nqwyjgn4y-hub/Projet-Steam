@@ -84,7 +84,7 @@ print(f"Nombre de jeux trouvés (filtrés) : {len(liste_jeux)}")
 with open('jeux_steam.csv', 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
 
-    writer.writerow(["Titre", "Infos Prix", "Avis", "Résumé"])   
+    writer.writerow(["Titre", "Infos Prix", "Avis", "Résumé", "Tags"])   
     
     # 2. On boucle sur chaque "boîte" une par une
     for jeu in liste_jeux:
