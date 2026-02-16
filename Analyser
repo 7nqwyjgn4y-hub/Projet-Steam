@@ -50,7 +50,7 @@ class SteamAnalyzerApp:
         ttk.Label(main_frame, text="Réduction minimum :").pack(anchor=tk.W)
         self.reduc_var = tk.StringVar()
         self.combo_reduc = ttk.Combobox(main_frame, textvariable=self.reduc_var, state="readonly")
-        self.combo_reduc['values'] = ("0%", "10%", "30%", "50%", "70%")
+        self.combo_reduc['values'] = ("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%",)
         self.combo_reduc.current(0)
         self.combo_reduc.pack(fill=tk.X, pady=5)
 
@@ -68,7 +68,7 @@ class SteamAnalyzerApp:
         ttk.Label(main_frame, text="Budget max (Tranches) :").pack(anchor=tk.W)
         self.prix_var = tk.StringVar()
         self.combo_prix = ttk.Combobox(main_frame, textvariable=self.prix_var, state="readonly")
-        self.combo_prix['values'] = ("10", "20", "30", "50", "100")
+        self.combo_prix['values'] = ("10", "20", "30", "50", "60","70", "80", "90", "100")
         self.combo_prix.current(2)
         self.combo_prix.pack(fill=tk.X, pady=5)
 
