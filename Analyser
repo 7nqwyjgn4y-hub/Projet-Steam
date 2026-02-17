@@ -133,7 +133,7 @@ class SteamHunterApp:
                                                   ["positives", "moyennes", "négatives"], "positives")
         
         self.prix_var = self._create_label_and_cb(main_container, "Budget max (€) :", 
-                                                  ["10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100"], "35")
+                                                  [f"{i}" for i in range(0, 100, 5)], "35")
 
         # Section Tags
         ttk.Separator(main_container, orient='horizontal').pack(fill='x', pady=20)
