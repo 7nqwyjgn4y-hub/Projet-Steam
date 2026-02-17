@@ -57,7 +57,7 @@ python main.py
 Le terminal vous demandera :
 - Voulez-vous lancer le scraping (récupération des promos) ? (o/n)
 - Tapez o (oui) pour lancer le robot.
-- Attendez que le terminal affiche ✅ Scraping terminé !
+- Attendez que le terminal affiche : Scraping terminé !
 - Note : Chrome ne s'ouvrira pas visiblement, tout se passe en arrière-plan.
 
 Ps : Dans le fichier python scrapper.py vous pouvez modifier la boucle pour charger plus de jeux dans le CSV.
