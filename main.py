@@ -8,7 +8,7 @@ from src.scraper import SteamPromoScraper
 try:
     from src.analyzer import lancer_interface
 except ImportError as e:
-    print(f"⚠️ Attention : Impossible d'importer l'analyseur ({e}).")
+    print(f" Attention : Impossible d'importer l'analyseur ({e}).")
     lancer_interface = None
 
 def main():
@@ -20,13 +20,13 @@ def main():
     choix = input("Voulez-vous lancer le scraping (récupération des promos) ? (o/n) : ").lower()
     
     if choix == 'o' or choix == 'y':
-        print("\n🚀 Lancement du Scraper...")
+        print("\n Lancement du Scraper...")
         try:
             bot = SteamPromoScraper()
             bot.executer() # Lance tout le processus de scraping
-            print("✅ Scraping terminé ! Le fichier 'jeux_steam.csv' est à jour.")
+            print(" Scraping terminé ! Le fichier 'jeux_steam.csv' est à jour.")
         except Exception as e:
-            print(f"❌ Erreur critique pendant le scraping : {e}")
+            print(f" Erreur critique pendant le scraping : {e}")
             input("Appuyez sur Entrée pour quitter...")
             return
     else:
@@ -36,11 +36,11 @@ def main():
     time.sleep(1)
 
     # Partie 2 : Analyser 
-    print("\n📊 Lancement de l'Interface d'Analyse...")
+    print("\n Lancement de l'Interface d'Analyse...")
     
     if not os.path.exists("jeux_steam.csv"):
-        print("❌ Erreur : Le fichier 'jeux_steam.csv' est introuvable !")
-        print("💡 Conseil : Lancez le scraping au moins une fois pour générer les données.")
+        print(" Erreur : Le fichier 'jeux_steam.csv' est introuvable !")
+        print(" Conseil : Lancez le scraping au moins une fois pour générer les données.")
         input("Appuyez sur Entrée pour quitter...")
         return
 
@@ -48,7 +48,7 @@ def main():
         print("Ouverture de la fenêtre... (Regardez votre barre des tâches si elle n'apparaît pas)")
         lancer_interface()
     else:
-        print("❌ Erreur : Le module d'analyse n'a pas pu être chargé.")
+        print(" Erreur : Le module d'analyse n'a pas pu être chargé.")
 
     print("\n========================================")
     print("👋 Fin du programme.")
