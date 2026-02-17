@@ -127,13 +127,13 @@ class SteamHunterApp:
 
         # Configuration des menus déroulants
         self.reduc_var = self._create_label_and_cb(main_container, "Réduction minimum :", 
-                                                   [f"{i}%" for i in range(0, 100, 10)], "30%")
+                                                   [f"{i}%" for i in range(0, 100, 10)], "10%")
         
         self.avis_var = self._create_label_and_cb(main_container, "Avis des joueurs :", 
                                                   ["positives", "moyennes", "négatives"], "positives")
         
         self.prix_var = self._create_label_and_cb(main_container, "Budget max (€) :", 
-                                                  ["10", "20", "30", "50", "100"], "50")
+                                                  ["10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "100"], "35")
 
         # Section Tags
         ttk.Separator(main_container, orient='horizontal').pack(fill='x', pady=20)
