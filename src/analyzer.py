@@ -61,7 +61,7 @@ class ResultsWindow(tk.Toplevel):
     
     def __init__(self, parent, results):
         super().__init__(parent)
-        self.title(f"Jeuxs trouvées ({len(results)})")
+        self.title(f"Jeux trouvées ({len(results)})")
         self.geometry("450x500")
         self._build_ui(results)
 
